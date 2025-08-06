@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Pinned Diamond Animation — concentric borders</title>
+<title>Pinned Diamond Animation — corrected falling icon</title>
 <style>
-:root{--bg:#0d0d0d;--line:#4b4b4b;--pink:#ff6fb5}
-html,body{height:100%;margin:0;background:var(--bg)}
+:root{--bg:#0d0d0d;--line:#292929;--pink:#ff6fb5}
+html,body{height:100%;margin:0;background:var(--bg);-webkit-font-smoothing:antialiased}
 .wrap{position:relative;width:100%;height:100vh;display:grid;place-items:center;overflow:visible}
 svg{width:min(80vmin,800px);height:min(80vmin,800px)}
 line{stroke-linecap:round;stroke-width:2}
@@ -15,8 +15,8 @@ line{stroke-linecap:round;stroke-width:2}
 /* inner filled diamond */
 #diamond{
   position:absolute;
-  left:50%;top:50%;
-  width:120px;height:120px;
+  left:50%; top:50%;
+  width:120px; height:120px;
   transform:translate(-50%,-50%) rotate(45deg) scale(0.6);
   transform-origin:center center;
   border-radius:8px;
@@ -30,28 +30,40 @@ line{stroke-linecap:round;stroke-width:2}
   z-index:100;
 }
 
-/* concentric outer border diamonds (no fill) */
-#diamond-outer1,
-#diamond-outer2 {
-  position: absolute;
-  left: 50%; top: 50%;
-  width: 120px; height: 120px;
-  transform: translate(-50%, -50%) rotate(45deg) scale(0); /* start at 0 */
-  transform-origin: center center;
-  border-radius: 8px;
-  pointer-events: none;
-  background: transparent;
-  border: 1px solid rgba(255,111,181,0.9);
-  z-index: 5; /* behind the filled diamond */
-  will-change: transform, opacity;
+/* outer border diamonds */
+#diamond-outer1, #diamond-outer2 {
+  position:absolute;
+  left:50%; top:50%;
+  width:120px; height:120px;
+  transform:translate(-50%,-50%) rotate(45deg) scale(0);
+  transform-origin:center center;
+  border-radius:8px;
+  pointer-events:none;
+  background:transparent;
+  border:1px solid rgba(255,111,181,0.9);
+  will-change:transform,opacity;
 }
-
-/* different starting scales so there's initial spacing */
 #diamond-outer1{ transform:translate(-50%,-50%) rotate(45deg) scale(0.9); z-index:9; }
 #diamond-outer2{ transform:translate(-50%,-50%) rotate(45deg) scale(1.2); z-index:8; }
 
 #diamond.glow{ box-shadow:0 20px 80px rgba(255,111,181,0.25),0 6px 20px rgba(255,111,181,0.12); }
 
+/* falling icon: SMALL and starts at top-center of the pinned container */
+/* inside .wrap and positioned absolute so it participates in pinning */
+#fall-icon{
+  position:absolute;      /* changed from fixed -> absolute */
+  left:50%;               /* center relative to .wrap */
+  top:40px;               /* start 40px from top of the pinned area */
+  transform:translate(-50%,0); /* center on the left coordinate */
+  width:82px;
+  height:82px;
+  pointer-events:none;
+  z-index:500;
+  will-change:transform,opacity;
+}
+#fall-icon svg{ width:100%; height:100%; display:block; }
+
+/* keep page scrollable so pinned section works */
 .spacer{height:200vh}
 </style>
 </head>
@@ -61,14 +73,37 @@ line{stroke-linecap:round;stroke-width:2}
   <div class="wrap">
     <svg id="canvas" viewBox="0 0 1000 1000" aria-hidden="true">
       <defs id="defsBlock"></defs>
-      <line id="axis-vert" class="axis" x1="500" y1="100" x2="500" y2="900"/>
-      <line id="axis-horz" class="axis" x1="100" y1="500" x2="900" y2="500"/>
+
+      <!-- Axis lines pushed closer to edges (longer) -->
+      <line id="axis-vert" class="axis" x1="500" y1="20"  x2="500" y2="980"/>
+      <line id="axis-horz" class="axis" x1="20"  y1="500" x2="980" y2="500"/>
+
       <g id="quad-lines"></g>
     </svg>
 
     <div id="diamond-outer2" aria-hidden="true"></div>
     <div id="diamond-outer1" aria-hidden="true"></div>
     <div id="diamond" aria-hidden="true"></div>
+
+    <!-- Moved the falling icon inside the pinned .wrap and use absolute positioning -->
+    <div id="fall-icon" aria-hidden="true">
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <linearGradient id="grad-fall" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#ff6fb5" />
+            <stop offset="100%" stop-color="#a855f7" />
+          </linearGradient>
+        </defs>
+        <path d="
+          M100,20
+          C120,65  140,65  180,100
+          C140,135 120,135 100,180
+          C80,135  60,135  20,100
+          C60,65   80,65   100,20
+          Z"
+          fill="url(#grad-fall)" />
+      </svg>
+    </div>
   </div>
 </section>
 
@@ -79,55 +114,84 @@ line{stroke-linecap:round;stroke-width:2}
 <script>
 gsap.registerPlugin(ScrollTrigger);
 
-const g=document.getElementById("quad-lines"),defs=document.getElementById("defsBlock"),
-      cx=500,cy=500,radiusX=450,radiusY=320,linesPerQuadrant=3,
-      quads=[{start:-90,end:0},{start:0,end:90},{start:90,end:180},{start:180,end:270}];
-let gradCounter=0;
-function d2r(d){return d*Math.PI/180}
-function makeGrad(x1,y1,x2,y2){
-  const id="g"+gradCounter++,grad=document.createElementNS("http://www.w3.org/2000/svg","linearGradient");
-  grad.setAttribute("id",id);grad.setAttribute("gradientUnits","userSpaceOnUse");
-  grad.setAttribute("x1",x1);grad.setAttribute("y1",y1);grad.setAttribute("x2",x2);grad.setAttribute("y2",y2);
+/* --- build radial lines --- */
+/* increased radiusX/radiusY so diagonal lines reach out further */
+const g = document.getElementById("quad-lines"),
+      defs = document.getElementById("defsBlock"),
+      cx = 500, cy = 500,
+      radiusX = 550,   // horizontal reach of diagonal lines
+      radiusY = 380,   // vertical reach of diagonal lines
+      linesPerQuadrant = 3,
+      quads = [{start:-90,end:0},{start:0,end:90},{start:90,end:180},{start:180,end:270}];
+
+let gradCounter = 0;
+function d2r(d){ return d * Math.PI / 180; }
+
+function makeGrad(x1, y1, x2, y2){
+  const id = "g"+(gradCounter++),
+        grad = document.createElementNS("http://www.w3.org/2000/svg","linearGradient");
+  grad.setAttribute("id", id);
+  grad.setAttribute("gradientUnits","userSpaceOnUse");
+  grad.setAttribute("x1", x1); grad.setAttribute("y1", y1);
+  grad.setAttribute("x2", x2); grad.setAttribute("y2", y2);
   [["0%","1"],["85%","1"],["100%","0"]].forEach(([o,op])=>{
-    const s=document.createElementNS("http://www.w3.org/2000/svg","stop");
-    s.setAttribute("offset",o);s.setAttribute("stop-color","var(--line)");s.setAttribute("stop-opacity",op);
-    grad.appendChild(s)});
-  defs.appendChild(grad);return id;
+    const s = document.createElementNS("http://www.w3.org/2000/svg","stop");
+    s.setAttribute("offset", o); s.setAttribute("stop-color","var(--line)"); s.setAttribute("stop-opacity", op);
+    grad.appendChild(s);
+  });
+  defs.appendChild(grad);
+  return id;
 }
+
 quads.forEach(q=>{
-  const step=(q.end-q.start)/(linesPerQuadrant+1);
-  for(let i=1;i<=linesPerQuadrant;i++){
-    const a=d2r(q.start+step*i),x2=cx+Math.cos(a)*radiusX,y2=cy+Math.sin(a)*radiusY,
-          gid=makeGrad(cx,cy,x2,y2),ln=document.createElementNS("http://www.w3.org/2000/svg","line");
-    ln.setAttribute("x1",cx);ln.setAttribute("y1",cy);ln.setAttribute("x2",x2);ln.setAttribute("y2",y2);
-    ln.setAttribute("stroke",`url(#${gid})`);g.appendChild(ln)
+  const step = (q.end - q.start) / (linesPerQuadrant + 1);
+  for(let i = 1; i <= linesPerQuadrant; i++){
+    const a = d2r(q.start + step * i),
+          x2 = cx + Math.cos(a) * radiusX,
+          y2 = cy + Math.sin(a) * radiusY,
+          gid = makeGrad(cx, cy, x2, y2),
+          ln = document.createElementNS("http://www.w3.org/2000/svg","line");
+    ln.setAttribute("x1", cx); ln.setAttribute("y1", cy);
+    ln.setAttribute("x2", x2); ln.setAttribute("y2", y2);
+    ln.setAttribute("stroke", `url(#${gid})`);
+    g.appendChild(ln);
   }
 });
-(()=>{const vId="v"+gradCounter++,vg=document.createElementNS("http://www.w3.org/2000/svg","linearGradient");
-  vg.setAttribute("id",vId);vg.setAttribute("gradientUnits","userSpaceOnUse");
-  vg.setAttribute("x1",500);vg.setAttribute("y1",100);vg.setAttribute("x2",500);vg.setAttribute("y2",900);
+
+/* --- axis gradients (match the longer axis coordinates) --- */
+(() => {
+  const vId = "v" + (gradCounter++),
+        vg = document.createElementNS("http://www.w3.org/2000/svg","linearGradient");
+  vg.setAttribute("id", vId);
+  vg.setAttribute("gradientUnits", "userSpaceOnUse");
+  // match the y values used on the axis line above (20 -> 980)
+  vg.setAttribute("x1", 500); vg.setAttribute("y1", 20);
+  vg.setAttribute("x2", 500); vg.setAttribute("y2", 980);
   [["0%","0"],["48%","1"],["52%","1"],["100%","0"]].forEach(([o,op])=>{
-    const s=document.createElementNS("http://www.w3.org/2000/svg","stop");
-    s.setAttribute("offset",o);s.setAttribute("stop-color","var(--line)");s.setAttribute("stop-opacity",op);
-    vg.appendChild(s)});
+    const s = document.createElementNS("http://www.w3.org/2000/svg","stop");
+    s.setAttribute("offset", o); s.setAttribute("stop-color","var(--line)"); s.setAttribute("stop-opacity", op);
+    vg.appendChild(s);
+  });
   defs.appendChild(vg);
-  document.getElementById("axis-vert").setAttribute("stroke",`url(#${vId})`);
-  const hId="h"+gradCounter++,hg=document.createElementNS("http://www.w3.org/2000/svg","linearGradient");
-  hg.setAttribute("id",hId);hg.setAttribute("gradientUnits","userSpaceOnUse");
-  hg.setAttribute("x1",100);hg.setAttribute("y1",500);hg.setAttribute("x2",900);hg.setAttribute("y2",500);
+  document.getElementById("axis-vert").setAttribute("stroke", `url(#${vId})`);
+
+  const hId = "h" + (gradCounter++),
+        hg = document.createElementNS("http://www.w3.org/2000/svg","linearGradient");
+  hg.setAttribute("id", hId);
+  hg.setAttribute("gradientUnits", "userSpaceOnUse");
+  // match the x values used on the axis line above (20 -> 980)
+  hg.setAttribute("x1", 20); hg.setAttribute("y1", 500);
+  hg.setAttribute("x2", 980); hg.setAttribute("y2", 500);
   [["0%","0"],["48%","1"],["52%","1"],["100%","0"]].forEach(([o,op])=>{
-    const s=document.createElementNS("http://www.w3.org/2000/svg","stop");
-    s.setAttribute("offset",o);s.setAttribute("stop-color","var(--line)");s.setAttribute("stop-opacity",op);
-    hg.appendChild(s)});
+    const s = document.createElementNS("http://www.w3.org/2000/svg","stop");
+    s.setAttribute("offset", o); s.setAttribute("stop-color","var(--line)"); s.setAttribute("stop-opacity", op);
+    hg.appendChild(s);
+  });
   defs.appendChild(hg);
-  document.getElementById("axis-horz").setAttribute("stroke",`url(#${hId})`);
+  document.getElementById("axis-horz").setAttribute("stroke", `url(#${hId})`);
 })();
 
-/* timeline that scales inner + two outer borders together (all pinned & scrubbed) */
-const startInner = 0.6, endInner = 1.2;
-const startOuter1 = 0.9, endOuter1 = 1.7;
-const startOuter2 = 1.2, endOuter2 = 2.2;
-
+/* --- timeline (pin + scrub) --- */
 const tl = gsap.timeline({
   scrollTrigger: {
     trigger: "#pin-section",
@@ -138,23 +202,11 @@ const tl = gsap.timeline({
   }
 });
 
-tl.fromTo("#diamond", 
-    { scale: 0.6 }, 
-    { scale: 1.2 }, 
-    0
-  )
-  .fromTo("#diamond-outer1", 
-    { scale: 0.6, opacity: 0 }, 
-    { scale: 1.9, opacity: 1 }, 
-    0 // starts together
-  )
-  .fromTo("#diamond-outer2", 
-    { scale: 0.6, opacity: 0 }, 
-    { scale: 2.6, opacity: 1 }, 
-    0
-  );
+tl.fromTo("#diamond", { scale: 0.6 }, { scale: 1.2 }, 0)
+  .fromTo("#diamond-outer1", { scale: 0.6, opacity: 0 }, { scale: 1.9, opacity: 1 }, 0)
+  .fromTo("#diamond-outer2", { scale: 0.6, opacity: 0 }, { scale: 2.6, opacity: 1 }, 0);
 
-/* glow toggle for inner diamond */
+/* glow toggle (unchanged) */
 ScrollTrigger.create({
   trigger: "#pin-section",
   start: "top top",
@@ -165,6 +217,40 @@ ScrollTrigger.create({
     const el = document.getElementById('diamond');
     if(p > 0.6) el.classList.add('glow'); else el.classList.remove('glow');
   }
+});
+
+/* --- falling icon straight-line calculation --- */
+const fallIcon = document.getElementById('fall-icon');
+const diamond = document.getElementById('diamond');
+
+function computeDeltas() {
+  const iconRect = fallIcon.getBoundingClientRect();
+  const dRect = diamond.getBoundingClientRect();
+
+  const iconCenterX = iconRect.left + iconRect.width / 2;
+  const iconCenterY = iconRect.top + iconRect.height / 2;
+  const diamondCenterX = dRect.left + dRect.width / 2;
+  const diamondCenterY = dRect.top + dRect.height / 2;
+
+  return {
+    deltaX: diamondCenterX - iconCenterX,
+    deltaY: diamondCenterY - iconCenterY
+  };
+}
+
+tl.to(fallIcon, {
+  x: () => computeDeltas().deltaX,
+  y: () => computeDeltas().deltaY,
+  ease: "power2.out",
+  immediateRender: false
+}, 0);
+
+window.addEventListener('resize', () => {
+  ScrollTrigger.refresh();
+});
+
+ScrollTrigger.addEventListener("refreshInit", () => {
+  gsap.set(fallIcon, { x: 0, y: 0 });
 });
 </script>
 </body>
