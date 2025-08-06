@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Pinned Diamond Animation — corrected falling icon</title>
+<title>Pinned Diamond Animation — corrected falling icon + small diamonds</title>
 <style>
 :root{--bg:#0d0d0d;--line:#292929;--pink:#ff6fb5}
 html,body{height:100%;margin:0;background:var(--bg);-webkit-font-smoothing:antialiased}
@@ -49,12 +49,11 @@ line{stroke-linecap:round;stroke-width:2}
 #diamond.glow{ box-shadow:0 20px 80px rgba(255,111,181,0.25),0 6px 20px rgba(255,111,181,0.12); }
 
 /* falling icon: SMALL and starts at top-center of the pinned container */
-/* inside .wrap and positioned absolute so it participates in pinning */
 #fall-icon{
-  position:absolute;      /* changed from fixed -> absolute */
-  left:50%;               /* center relative to .wrap */
-  top:40px;               /* start 40px from top of the pinned area */
-  transform:translate(-50%,0); /* center on the left coordinate */
+  position:absolute;
+  left:50%;
+  top:40px;
+  transform:translate(-50%,0);
   width:82px;
   height:82px;
   pointer-events:none;
@@ -62,6 +61,27 @@ line{stroke-linecap:round;stroke-width:2}
   will-change:transform,opacity;
 }
 #fall-icon svg{ width:100%; height:100%; display:block; }
+
+/* small extra diamonds (top-left, top-right, bottom-left) */
+.small-diamond {
+  position:absolute;
+  width:18px;
+  height:18px;
+  transform:rotate(45deg) translateZ(0);
+  transform-origin:center center;
+  border-radius:4px;
+  border:1px solid var(--pink);
+  background:transparent;
+  pointer-events:none;
+  will-change:transform,opacity;
+  opacity:0.95;
+  z-index:7; /* under the main diamond but above outer lines */
+}
+
+/* precise placement relative to .wrap (centered container) */
+.small-diamond.top-left  { left:35%;  top:38%;  transform:translate(-50%,-50%) rotate(45deg) scale(0.72); }
+.small-diamond.top-right { left:63%;  top:42%;  transform:translate(-50%,-50%) rotate(45deg) scale(0.72); }
+.small-diamond.bottom-left{ left:41%;  top:68%;  transform:translate(-50%,-50%) rotate(45deg) scale(0.72); }
 
 /* keep page scrollable so pinned section works */
 .spacer{height:200vh}
@@ -85,7 +105,12 @@ line{stroke-linecap:round;stroke-width:2}
     <div id="diamond-outer1" aria-hidden="true"></div>
     <div id="diamond" aria-hidden="true"></div>
 
-    <!-- Moved the falling icon inside the pinned .wrap and use absolute positioning -->
+    <!-- small extra diamonds -->
+    <div class="small-diamond top-left" aria-hidden="true"></div>
+    <div class="small-diamond top-right" aria-hidden="true"></div>
+    <div class="small-diamond bottom-left" aria-hidden="true"></div>
+
+    <!-- falling icon (inside pinned .wrap) -->
     <div id="fall-icon" aria-hidden="true">
       <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
         <defs>
@@ -115,12 +140,11 @@ line{stroke-linecap:round;stroke-width:2}
 gsap.registerPlugin(ScrollTrigger);
 
 /* --- build radial lines --- */
-/* increased radiusX/radiusY so diagonal lines reach out further */
 const g = document.getElementById("quad-lines"),
       defs = document.getElementById("defsBlock"),
       cx = 500, cy = 500,
-      radiusX = 550,   // horizontal reach of diagonal lines
-      radiusY = 380,   // vertical reach of diagonal lines
+      radiusX = 550,
+      radiusY = 380,
       linesPerQuadrant = 3,
       quads = [{start:-90,end:0},{start:0,end:90},{start:90,end:180},{start:180,end:270}];
 
@@ -158,13 +182,12 @@ quads.forEach(q=>{
   }
 });
 
-/* --- axis gradients (match the longer axis coordinates) --- */
+/* --- axis gradients --- */
 (() => {
   const vId = "v" + (gradCounter++),
         vg = document.createElementNS("http://www.w3.org/2000/svg","linearGradient");
   vg.setAttribute("id", vId);
   vg.setAttribute("gradientUnits", "userSpaceOnUse");
-  // match the y values used on the axis line above (20 -> 980)
   vg.setAttribute("x1", 500); vg.setAttribute("y1", 20);
   vg.setAttribute("x2", 500); vg.setAttribute("y2", 980);
   [["0%","0"],["48%","1"],["52%","1"],["100%","0"]].forEach(([o,op])=>{
@@ -179,7 +202,6 @@ quads.forEach(q=>{
         hg = document.createElementNS("http://www.w3.org/2000/svg","linearGradient");
   hg.setAttribute("id", hId);
   hg.setAttribute("gradientUnits", "userSpaceOnUse");
-  // match the x values used on the axis line above (20 -> 980)
   hg.setAttribute("x1", 20); hg.setAttribute("y1", 500);
   hg.setAttribute("x2", 980); hg.setAttribute("y2", 500);
   [["0%","0"],["48%","1"],["52%","1"],["100%","0"]].forEach(([o,op])=>{
@@ -202,9 +224,72 @@ const tl = gsap.timeline({
   }
 });
 
+/* center/main diamond scaling */
 tl.fromTo("#diamond", { scale: 0.6 }, { scale: 1.2 }, 0)
   .fromTo("#diamond-outer1", { scale: 0.6, opacity: 0 }, { scale: 1.9, opacity: 1 }, 0)
   .fromTo("#diamond-outer2", { scale: 0.6, opacity: 0 }, { scale: 2.6, opacity: 1 }, 0);
+
+/* small diamonds — compute offsets dynamically so they move farther outward */
+const sTL = document.querySelector('.small-diamond.top-left'),
+      sTR = document.querySelector('.small-diamond.top-right'),
+      sBL = document.querySelector('.small-diamond.bottom-left');
+
+/* helper: compute vector from center element (diamond) to element center */
+function getVectorFromCenter(el, centerEl) {
+  const re = el.getBoundingClientRect();
+  const rc = centerEl.getBoundingClientRect();
+  const elCX = re.left + re.width / 2;
+  const elCY = re.top + re.height / 2;
+  const cCX  = rc.left + rc.width / 2;
+  const cCY  = rc.top  + rc.height / 2;
+  return { x: elCX - cCX, y: elCY - cCY };
+}
+
+/* tweak this to control how far they move (higher = farther) */
+const depthFactor = 1.8;
+
+function computeEndOffset(el){
+  const vec = getVectorFromCenter(el, document.getElementById('diamond'));
+  const multiplier = 0.5 * depthFactor; // base 0.5 gives subtle motion; scale with depthFactor
+  return { x: vec.x * multiplier, y: vec.y * multiplier };
+}
+
+/* use function-based end values so they recalc at runtime (works on resize) */
+tl.fromTo(sTL,
+  { scale: 0.72, x: 0, y: 0, opacity: 0.95 },
+  {
+    scale: 0.9,
+    x: () => computeEndOffset(sTL).x,
+    y: () => computeEndOffset(sTL).y,
+    opacity: 1,
+    ease: "power1.out"
+  },
+  0
+);
+
+tl.fromTo(sTR,
+  { scale: 0.72, x: 0, y: 0, opacity: 0.95 },
+  {
+    scale: 1.4,
+    x: () => computeEndOffset(sTR).x,
+    y: () => computeEndOffset(sTR).y,
+    opacity: 1,
+    ease: "power1.out"
+  },
+  0
+);
+
+tl.fromTo(sBL,
+  { scale: 0.72, x: 0, y: 0, opacity: 0.95 },
+  {
+    scale: 1.1,
+    x: () => computeEndOffset(sBL).x,
+    y: () => computeEndOffset(sBL).y,
+    opacity: 1,
+    ease: "power1.out"
+  },
+  0
+);
 
 /* glow toggle (unchanged) */
 ScrollTrigger.create({
@@ -245,13 +330,11 @@ tl.to(fallIcon, {
   immediateRender: false
 }, 0);
 
-window.addEventListener('resize', () => {
-  ScrollTrigger.refresh();
-});
-
+/* refresh/resize handling: reset small diamonds and fallIcon so function-based ends re-evaluate */
 ScrollTrigger.addEventListener("refreshInit", () => {
-  gsap.set(fallIcon, { x: 0, y: 0 });
+  gsap.set([sTL, sTR, sBL, fallIcon], { x: 0, y: 0 });
 });
+window.addEventListener('resize', () => ScrollTrigger.refresh());
 </script>
 </body>
 </html>
